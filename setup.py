@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cascata',
-    version='0.1.0',
+    version='0.1.1',
     author='Stuart MacLeod',
     author_email='orangootan@gmail.com',
     description='An asynchronous, multicore graph execution framework for Python.',
