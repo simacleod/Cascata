@@ -19,7 +19,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'License :: OSI Approved :: MIT License',
-        'Operating System :: Linux',
+        'Operating System :: POSIX :: Linux',
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Libraries',
         'Framework :: AsyncIO',
