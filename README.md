@@ -46,7 +46,7 @@ from cascata import * #imports the @inport, @outport, @component decorators, and
 @inport('data_in', capacity=10) # Define an InputPort named "data_in", with a capacity of 10.
 @inport('constant_in', default=1) # Define an InputPort which is initialized with a default value.
 @outport('data_out') #Define an OutputPort, used for sending data to downstream components.
-async def NumberIncrementer(data_in, constant_in,d ata_out): # Always use async def when defining component runners.
+async def NumberIncrementer(data_in, constant_in, data_out): # Always use async def when defining component runners.
 
 	await data_out.send(data_in + constant_in) # Send the sum of the values of the data received by the inports through the output port
 
