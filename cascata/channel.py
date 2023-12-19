@@ -15,6 +15,7 @@ class Channel:
         sender_count (multiprocess.Value): A shared value to track the number of active senders.
         active (aioprocessing.AioEvent): An event that receivers wait on until at least one sender is active.
         cancel_event (aioprocessing.AioEvent): An event to signal cancellation across processes.
+        cancel_water (future) : A running task which waits on self.cancel_event
         queue (aioprocessing.AioQueue): An asynchronous queue for messages with a specified capacity.
     """
     def __init__(self, capacity=100):
@@ -27,6 +28,7 @@ class Channel:
         self.sender_count = Value('i', 0)
         self.active = Event()
         self.cancel_event = Event()
+        self.cancel_waiter = None
         self.queue = Queue(capacity)
 
     async def put(self, item):
@@ -56,6 +58,7 @@ class Channel:
             with self.sender_count.get_lock():
                 self.sender_count.value -= 1
 
+
     async def wait_for_cancel(self):
         """
         An asynchronous coroutine that blocks until the cancel_event is set.
@@ -80,7 +83,8 @@ class Channel:
         """
         futures = [
             asyncio.ensure_future(self.queue.coro_get()), 
-            asyncio.ensure_future(self.wait_for_cancel())
+            self.cancel_waiter
+            #asyncio.ensure_future(self.wait_for_cancel())
         ]
         done, pending = await asyncio.wait(
             futures,
@@ -94,8 +98,6 @@ class Channel:
             await asyncio.sleep(0.01)
             raise StopAsyncIteration
         
-        for task in pending:
-            task.cancel()
 
         for task in done:
             if task.exception():
@@ -109,6 +111,8 @@ class Channel:
         Returns:
             The channel instance itself.
         """
+        if self.cancel_waiter is None: 
+            self.cancel_waiter=asyncio.ensure_future(self.wait_for_cancel())
         return self
 
     async def flag_cancellation(self):

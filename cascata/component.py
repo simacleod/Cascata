@@ -97,13 +97,13 @@ class Component:
     
             all_grouped_ports = set().union(*self._groups)
             exec_flags=[True for port in self._groups]
-            ungrouped_ports = self.inports-all_grouped_ports
+            ungrouped_ports = self.inports-all_grouped_ports-initports
     
             # Add each ungrouped port as a group on its own
             for port in ungrouped_ports:
                 self._groups.append({port})
                 exec_flags.append(False)
-    
+            print(self._groups)
             # Prepare and run all group listeners concurrently
             group_listeners = [self._group_listener(group,flag) for group,flag in zip(self._groups,exec_flags)]
             await asyncio.gather(*group_listeners)
