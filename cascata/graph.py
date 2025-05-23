@@ -6,7 +6,10 @@ import inspect
 from .component import Component
 from .port import InputPort, OutputPort
 import traceback
-from graphviz import Digraph
+try:
+    from graphviz import Digraph
+except:
+    Digraph = False
 
 
 class Graph:
@@ -143,6 +146,9 @@ class Graph:
         Returns:
             graphviz.Digraph: GraphViz graph object
         """
+        if not Digraph:
+            print('to_dot requires the "graphviz" module:')
+            print('    pip install graphviz')
         dot = Digraph(comment='Cascata Graph', graph_attr=dict(
             rankdir='TD'), node_attr=dict(shape='box'))
 
