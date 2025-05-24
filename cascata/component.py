@@ -34,7 +34,22 @@ class Component:
 
     def __getattr__(self,attr):
         return self.ports.get(attr)
-    
+
+    def copy(self):
+
+        new = self.__class__(self.name)
+
+        for ip in self.inports:
+            new_ip = getattr(new, ip.name)
+            new_ip.initialization_value = ip.initialization_value
+
+        new._groups = [
+            tuple(getattr(new, port.name) for port in group)
+            for group in self._groups
+        ]
+
+        return new
+
     def add_inport(self, port):
         self.inports.add(port)
         port.component=self
@@ -103,7 +118,6 @@ class Component:
             for port in ungrouped_ports:
                 self._groups.append({port})
                 exec_flags.append(False)
-            print(self._groups)
             # Prepare and run all group listeners concurrently
             group_listeners = [self._group_listener(group,flag) for group,flag in zip(self._groups,exec_flags)]
             await asyncio.gather(*group_listeners)

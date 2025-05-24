@@ -80,8 +80,7 @@ class OutputPort:
         :param inport: The InputPort to connect to.
         """
         inport.initialization_value=None
-        self.component.graph.edges.append((inport,self))
-        self.component.graph.networkx_graph.add_edge(self.component, inport.component)
+        self.component.graph.edge(self, inport)
         self.connections.add(inport)
 
     def __rshift__(self,inport):

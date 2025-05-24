@@ -162,7 +162,7 @@ Graphs in Cascata are used to facilitate *composition* of components into interc
 - Since all components are defined as coroutines, the full feature set of `asyncio` can be leveraged to accelerate I/O bound code.
 
 ## Requirements and dependencies:
-- Python 3.7 or 3.8
+- Python 3.7+
 - Currently working only on Linux.
 - Python package dependencies: 
 ```bash
@@ -188,10 +188,7 @@ Contributions to Cascata are highly encouraged and merge requests welcomed.
 ### Features to be implemented:
 	
 - Windows, MacOS support
-- Support for Subgraphs
 - Support for grouped components
-- Python3.9+ support
-- Deadlock detection
 - Logging facilities
 
 If you are a large corporation, and you find Cascata useful in your highly profitable software development ventures, consider sending the author like a million dollars. TIA
