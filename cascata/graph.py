@@ -5,6 +5,7 @@ import asyncio
 import inspect
 from .component import Component, ComponentGroup, GroupConnector
 from .port import InputPort, OutputPort
+from .log import log
 import traceback
 try:
     from graphviz import Digraph
@@ -367,7 +368,7 @@ class Graph:
             for p in self.processes:
                 p.join()
         except KeyboardInterrupt:
-            print("\nGraph execution cancelled by user.")
+            log.warn("\nGraph execution cancelled by user.")
         finally:
             for p in self.processes:
                 p.terminate()
@@ -390,8 +391,7 @@ class Graph:
         - Outports on bottom, with equal column spans
         """
         if not Digraph:
-            print('to_dot requires graphviz:')
-            print('    pip install graphviz')
+            log.warn('to_dot requires graphviz:\n    pip install graphviz')
             return
 
         dot = Digraph(
@@ -512,7 +512,7 @@ class GraphWorker:
             loop.run_until_complete(asyncio.gather(
                 *[comp.run() for comp in self.components]))
         except Exception as e:
-            print(f"Exception in GraphWorker: {e}")
+            log.error(f"Exception in GraphWorker: {e}")
             traceback.print_exc()
         finally:
             loop.close()

@@ -14,14 +14,16 @@ LEVEL_COLORS = {
     'error': "\033[31m",   # red
 }
 
-# Generate a bright ANSI color code deterministically from component class name
+# Generate a bright ANSI 256-color code deterministically from component class name
 def _get_component_color(class_name: str) -> str:
-    # ANSI bright colors range from 91 to 97
+    """
+    Generate a bright, bold ANSI 256-color code deterministically from the component class name using hash.
+    """
     digest = hashlib.md5(class_name.encode('utf-8')).digest()
-    # Use first byte to pick 1-7
-    idx = (digest[0] % 7) + 1
-    code = 90 + idx
-    return f"\033[{code}m"
+    # Use two bytes to spread across the 216-color cube (starting at 16)
+    idx = (digest[0] << 8 | digest[1]) % 216  # range 0-215
+    code = 16 + idx  # ANSI 256-color code: 16-231 are the color cube
+    return f"\033[38;5;{code}m"
 
 # Context var to track current component
 _current_component = contextvars.ContextVar('current_component', default=None)
@@ -40,8 +42,8 @@ class ContextAwareHandler(logging.StreamHandler):
     def emit(self, record):
         try:
             msg = record.getMessage()
-            level_name = record.levelname.lower()
-            level_color = LEVEL_COLORS.get(level_name, "")
+            level = record.levelname.lower()
+            level_color = LEVEL_COLORS.get(level, "")
             reset = RESET
             comp = _current_component.get()
             if comp is not None:
