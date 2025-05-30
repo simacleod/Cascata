@@ -18,6 +18,7 @@ class ComponentMeta(type):
 class Component(metaclass = ComponentMeta):
     def __init__(self, name):
         self.name = name
+        self.group_name = None
         self.ports={}
         self.graph=None
         self.inports = set()

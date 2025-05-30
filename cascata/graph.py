@@ -101,6 +101,7 @@ class Graph:
             comp_name = f"{alias}_{i}"
             comp = factory.comp_cls(comp_name)
             comp.name = comp_name
+            comp.group_name = alias
             comp.graph = self
             self.nodes[comp_name] = comp
             self.__dict__[comp_name] = comp

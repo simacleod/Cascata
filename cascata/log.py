@@ -45,7 +45,7 @@ class ContextAwareHandler(logging.StreamHandler):
             reset = RESET
             comp = _current_component.get()
             if comp is not None:
-                comp_name = comp.name
+                comp_name = comp.group_name if getattr(comp, 'group_name', None) is not None else comp.name
                 comp_class = comp.__class__.__name__
                 comp_color = _get_component_color(comp_class)
                 prefix = f"{level_color}{record.levelname}{reset} - {comp_name}@{comp_color}{comp_class}{reset} : "
@@ -57,7 +57,7 @@ class ContextAwareHandler(logging.StreamHandler):
         except Exception:
             self.handleError(record)
 
-# Configure module-level logger\
+# Configure module-level logger
 log = logging.getLogger('cascata')
 log.setLevel(logging.DEBUG)
 log.handlers.clear()
