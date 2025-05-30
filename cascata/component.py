@@ -1,12 +1,21 @@
 import asyncio
 from collections import OrderedDict
 from contextlib import AsyncExitStack
-from aioitertools import zip as azip
+from aioitertools import zip as azip, chain, zip_longest, cycle
 from copy import deepcopy
-from .port import InputPort, OutputPort
+from .channel import Channel
+from .port import InputPort, OutputPort, PortHandler
 
 
-class Component:
+
+
+class ComponentMeta(type):
+    def __mul__(cls, count):
+        if not issubclass(cls, Component) or not isinstance(count, int):
+            return NotImplemented
+        return ComponentGroup(cls, count)
+
+class Component(metaclass = ComponentMeta):
     def __init__(self, name):
         self.name = name
         self.ports={}
@@ -30,7 +39,7 @@ class Component:
         component_text_centered = component_text.center(max_length)
         outports_text_centered = outports_text.center(max_length)
         
-        return f"{'_'*(max_length+4)}\n| {inports_text_centered} |\n| {component_text_centered} |\n| {outports_text_centered} |\n{'¯'*(max_length+4)}"
+        return f"\n{'_'*(max_length+4)}\n| {inports_text_centered} |\n| {component_text_centered} |\n| {outports_text_centered} |\n{'¯'*(max_length+4)}"
 
     def __getattr__(self,attr):
         return self.ports.get(attr)
@@ -152,3 +161,94 @@ def component(func):
     ComponentSubclass.__name__ = func.__name__
     return ComponentSubclass
 
+class ComponentGroup:
+    def __init__(self, comp_cls, count):
+        self.comp_cls = comp_cls     # the Component subclass
+        self.count    = count        # number of copies
+        # these get filled in by Graph._add_component_group
+        self.name     = None
+        self.graph    = None
+        self.group    = []           # list of Component instances
+        self.ports    = {}
+
+    def __repr__(self):
+        return f"<ComponentGroup {self.name} x{self.count}>"
+
+    def __getattr__(self, attr):
+        if not self.ports:
+            for k,v in self.group[0].ports.items():
+                self.ports[k]=PortHandler(k, self)
+        return self.ports[attr]
+
+    def initialize(self, name, val):
+        for comp in self.group:
+            comp.ports[name].__lt__(val)
+
+    def connect(self, src, target):
+        """
+        Connect this group’s output-port `name` into `target`.
+        - If `target` is a ComponentGroup of the same size: do 1:1 parallel wiring.
+        - Otherwise, insert a M→N GroupConnector under a synthetic name.
+        """
+        
+
+        if isinstance(src.component, ComponentGroup):
+            M = src.component.count
+            src_group = src.component.group
+        else:
+            src_group = [src.component]
+            M = 1
+
+        if isinstance(target.component, ComponentGroup):
+            N = target.component.count            
+            dst_group = target.component.group
+        else:
+            dst_group = [target.component]
+            N = 1
+
+        # Case A: same-size group→group → straight 1:1
+        if M == N:
+            for srcg, dstg in zip(enumerate(self.group), enumerate(dst_group)):
+                i,src_comp = srcg
+                j,dst_comp = dstg
+                src_comp.ports[src.name] >> dst_comp.ports[target.name]
+            return
+
+        # Case B/C: M→N with M != N → insert a bridge
+        conn_name = f"{src.component.name}.{src.name}-to-{target.component.name}.{target.name}"
+        # create connector component with base port name `name`
+        bridge = GroupConnector(conn_name, target.name, M, N)
+        # register it in the graph
+        self.graph.node(conn_name, bridge)
+        # 1) wire each of the M group members into bridge.in_{i}
+        for i, src_comp in enumerate(src_group):
+            src_comp.ports[src.name] >> bridge.ports[f"{target.name}_{i}_in"]
+
+        # 2) wire each of the N bridge.out_{j} into the dst components
+        for j, dst_comp in enumerate(dst_group):
+            bridge.ports[f"{target.name}_{j}_out"] >> dst_comp.ports[target.name]
+
+
+class GroupConnector(Component):
+    def __init__(self,base,name,M,N):
+        self.name = base
+        self.port_name = name
+        super().__init__(base)
+        self.M = M
+        self.N = N
+        for i in range(M): self.add_inport(InputPort(f"{name}_{i}_in"))
+        for j in range(N): self.add_outport(OutputPort(f"{name}_{j}_out"))
+
+    def copy(self):
+        return GroupConnector(self.name, self.port_name, self.M, self.N)
+
+    async def run(self):
+        async with AsyncExitStack() as stack:
+            await asyncio.gather(*[stack.enter_async_context(port.open()) for port in self.outports])
+            in_iters = [self.ports[f"{self.port_name}_{i}_in"].__aiter__() for i in range(self.M)]
+            merged   = chain.from_iterable(zip_longest(*in_iters, fillvalue=StopAsyncIteration))
+            dist     = cycle(self.outports)
+            async for item in merged:
+                if item is StopAsyncIteration: break
+                thisport = await anext(dist)
+                await thisport.send(item)

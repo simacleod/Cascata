@@ -3,7 +3,7 @@ import networkx as nx
 import multiprocess
 import asyncio
 import inspect
-from .component import Component
+from .component import Component, ComponentGroup, GroupConnector
 from .port import InputPort, OutputPort
 import traceback
 try:
@@ -44,6 +44,7 @@ class Graph:
         self._exports = {}
         self.is_subgraph = False
         self.parent = None
+        self.group_handles: dict[str,ComponentGroup] = {}
 
     def __setattr__(self, name, value):
         # detect adding a subgraph instance
@@ -55,12 +56,16 @@ class Graph:
             self.node(name, comp)
         elif isinstance(value, Component):
             self.node(name, value)
+        elif isinstance(value, ComponentGroup):
+            return self._add_component_group(name, value)            
         else:
             super().__setattr__(name, value)
 
     def __getattr__(self,name):
         if name in self._exports:
             return self._exports[name]
+        if name in self.group_handles:
+            return self.group_handles[name]            
         else:
             raise AttributeError(f"Graph object has no attribute {name}")
 
@@ -74,17 +79,46 @@ class Graph:
 
     def edge(self, outport, inport):
         """Connects an outport to an inport."""
+
+        if type(inport.component) is ComponentGroup:
+            inport.component.connect(outport, inport)
+            return
         root = self._find_root_graph((inport,outport))
         root.edges.append((outport, inport))
         root.networkx_graph.add_edge(outport.component, inport.component)
+    
+    def _add_component_group(self, alias: str, factory: ComponentGroup):
+        """
+        Instantiate factory.count copies of factory.comp_cls,
+        register them under names alias_0…alias_{n-1},
+        record them in self.group_handles and networkx_graph.
+        """
+        factory.name  = alias
+        factory.graph = self
+
+        # 1) instantiate all members
+        for i in range(factory.count):
+            comp_name = f"{alias}_{i}"
+            comp = factory.comp_cls(comp_name)
+            comp.name = comp_name
+            comp.graph = self
+            self.nodes[comp_name] = comp
+            self.__dict__[comp_name] = comp
+
+            self.networkx_graph.add_node(comp, group=(alias, i, factory.count))
+
+            factory.group.append(comp)
+        # 2) remember the group handle
+        self.group_handles[alias] = factory
+
+        # 3) expose the alias in local namespace
+        self._local_namespace[alias] = factory
 
     def export(self, port, name: str):
         """Expose an internal port as if it were a port on this Graph."""
         if name in self._exports:
             raise ValueError(f"export name '{name}' already used")
         self._exports[name] = port
-
-
 
     def _find_root_graph(self,edge):
         inport,outport = edge
@@ -227,31 +261,85 @@ class Graph:
         if issues:
             raise DeadlockError(issues)
 
-
     def shard(self, num_workers):
-        """Shards the graph into a set of GraphWorkers. Breaks all cycles in the internal networkx graph and runs a topological sort. Assigns components to a worker based on the sort order.
-
-        Args:
-            num_workers (int): Number of worker processes to spawn
-
-        Returns:
-            list: List of GraphWorkers.
         """
+        Shards the graph into GraphWorkers, using the advanced
+        shard_graph_final2 strategy to assign each node to a worker.
+        """
+        # 1) Break all cycles so we can topologically sort
         while self._break_cycles():
             pass
-        
-        # Perform a topological sort on the graph
-        topo_sorted_nodes = list(nx.topological_sort(self.networkx_graph))
+    
+        G = self.networkx_graph
+    
+        # 2) Build a helper map: group name → list of member nodes
+        group_map = {}
+        for node, data in G.nodes(data=True):
+            grp = data.get('group')
+            if grp:
+                name = grp[0]
+                group_map.setdefault(name, []).append(node)
+    
+        # 3) Topological sort
+        topo = list(nx.topological_sort(G))
+    
+        # 4) Advanced worker‐assignment
         color_map = {}
-
-        # Assign workers based on topological order
-        for index, node in enumerate(topo_sorted_nodes):
-            color_map[node] = index % num_workers
-
+        rr = 0
+        for node in topo:
+            # Unpack group info if any
+            grp = G.nodes[node].get('group')
+            if grp:
+                name, idx, size = grp
+                members = group_map[name]
+    
+                # (1) Parallel perfect‐matching: reuse parent’s worker
+                preds = list(G.predecessors(node))
+                if len(preds) == 1 and len(members) <= num_workers:
+                    parents = [next(G.predecessors(m)) for m in members]
+                    if len(set(parents)) == len(members):
+                        color_map[node] = color_map[parents[idx]]
+                        continue
+    
+            # (2) Split stage 1→N
+            preds = list(G.predecessors(node))
+            if len(preds) == 1:
+                p = preds[0]
+                children = list(G.successors(p))
+                if len(children) > 1:
+                    grp_c = G.nodes[node].get('group')
+                    if grp_c and grp_c[2] == len(children):
+                        i = children.index(node)
+                        pw = color_map[p]
+                        if len(children) < num_workers:
+                            avail = [w for w in range(num_workers) if w != pw]
+                            color_map[node] = avail[i % len(avail)]
+                        else:
+                            color_map[node] = i % num_workers
+                        continue
+    
+            # (3) Broadcast stage M→workers
+            assigned = False
+            for p in preds:
+                children = list(G.successors(p))
+                if len(children) == num_workers:
+                    i = children.index(node)
+                    color_map[node] = i
+                    assigned = True
+                    break
+            if assigned:
+                continue
+    
+            # (4) Fallback: global round-robin
+            color_map[node] = rr
+            rr = (rr + 1) % num_workers
+    
+        # 5) Instantiate workers and assign components
         workers = [GraphWorker() for _ in range(num_workers)]
-        for component_name, component in self.nodes.items():
-            worker_index = color_map.get(component_name, 0)
-            workers[worker_index].components.append(component)
+        for comp_name, comp in self.nodes.items():
+            worker_index = color_map.get(comp_name, 0)
+            workers[worker_index].components.append(comp)
+    
         return workers
 
     def start(self, num_workers=None):

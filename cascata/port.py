@@ -15,6 +15,9 @@ class InputPort:
         self.channel = Channel(capacity)  # Initialize a Channel object
         self.initialization_value = default
 
+    def __repr__(self):
+        return f'inport {self.component.name}.{self.name}'
+
     async def put(self, item):
         """
         Puts an item into the channel.
@@ -64,6 +67,8 @@ class OutputPort:
             await asyncio.gather(*[stack.enter_async_context(port.open()) for port in self.connections])
             yield
 
+    def __repr__(self):
+        return f'inport {self.component.name}.{self.name}'
 
     async def send(self, item):
         """
@@ -81,7 +86,22 @@ class OutputPort:
         """
         inport.initialization_value=None
         self.component.graph.edge(self, inport)
-        self.connections.add(inport)
+        if type(inport) is InputPort:
+            self.connections.add(inport)
 
     def __rshift__(self,inport):
         self.connect(inport)
+
+
+class PortHandler:
+    def __init__(self, name, parent):
+        self.name = name
+        self.component = parent
+    
+    def __lt__(self,b):
+        self.component.initialize(self.name, b)
+
+    def __rshift__(self,inport):
+        self.component.connect(self, inport)
+
+
