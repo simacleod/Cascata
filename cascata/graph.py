@@ -339,7 +339,6 @@ class Graph:
         for comp_name, comp in self.nodes.items():
             worker_index = color_map.get(comp_name, 0)
             workers[worker_index].components.append(comp)
-    
         return workers
 
     def start(self, num_workers=None):
