@@ -50,7 +50,7 @@ class ContextAwareHandler(logging.StreamHandler):
                 comp_name = comp.group_name if getattr(comp, 'group_name', None) is not None else comp.name
                 comp_class = comp.__class__.__name__
                 comp_color = _get_component_color(comp_class)
-                prefix = f"{level_color}{record.levelname}{reset} - {comp_name}@{comp_color}{comp_class}{reset} : "
+                prefix = f"{level_color}{record.levelname}{reset} - {comp_name}{comp_color}@{comp_class}{reset}: "
             else:
                 prefix = f"{level_color}{record.levelname}{reset} - Cascata: "
             stream = self.stream or sys.stdout
