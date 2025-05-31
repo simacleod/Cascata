@@ -176,8 +176,8 @@ async def MyComp(x, y):
 Log format:
 
 ```
-INFO [PID 12345] - MyComp@MyCompClass : Starting processing
-DEBUG [PID 12345] - MyComp@MyCompClass : Finished processing
+INFO - MyComp@MyCompClass : Starting processing
+DEBUG - MyComp@MyCompClass : Finished processing
 ```
 
 Levels and component class names are colorized for readability, and the logger requires no additional setup.
