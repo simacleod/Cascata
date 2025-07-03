@@ -172,6 +172,22 @@ class Graph:
             new.__dict__[name] = new_comp
             new._local_namespace[name] = new_comp
 
+        # Clone component groups
+        new.group_handles = {}
+        for alias, group in self.group_handles.items():
+            new_alias = f'{gname}_{alias}'
+            new_group = ComponentGroup(group.comp_cls, group.count)
+            new_group.name = new_alias
+            new_group.graph = new
+            for i in range(group.count):
+                comp_name = f'{new_alias}_{i}'
+                comp = new.nodes[comp_name]
+                new_group.group.append(comp)
+                comp.group_name = new_alias
+            new.group_handles[new_alias] = new_group
+            new.__dict__[new_alias] = new_group
+            new._local_namespace[new_alias] = new_group
+
         new.edges = []
         new.networkx_graph = nx.DiGraph()
         for outp, inp in self.edges:
@@ -183,8 +199,14 @@ class Graph:
 
         new._exports = {}
         for export_name, port in self._exports.items():
-            cloned_comp = comp_map[port.component]
-            cloned_port = getattr(cloned_comp, port.name)
+            comp = port.component
+            if isinstance(comp, ComponentGroup):
+                alias = f'{gname}_{comp.name}'
+                cloned_group = new.group_handles[alias]
+                cloned_port = getattr(cloned_group, port.name)
+            else:
+                cloned_comp = comp_map[comp]
+                cloned_port = getattr(cloned_comp, port.name)
             new._exports[export_name] = cloned_port
 
         return new
@@ -228,8 +250,8 @@ class Graph:
                         if ip.initialization_value is not None:
                             seeded = True
                             break
-                    if seeded:
-                        break
+                if seeded:
+                    break
                 if not seeded:
                     issues.append(
                         f"Cycle deadlock: components {sorted(scc)} form a cycle with no default seed."

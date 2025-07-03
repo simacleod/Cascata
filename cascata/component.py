@@ -63,7 +63,7 @@ class Component(metaclass = ComponentMeta):
             new_pv = new._persists.get(name)
             new_pv.set_args(*pv._args, **pv._kwargs)
             if pv._initialized:
-                new_pv.set(pv._value)
+                new_pv.set(pv.value)
 
         return new
 
