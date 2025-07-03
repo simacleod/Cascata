@@ -105,3 +105,40 @@ class PortHandler:
         self.component.connect(self, inport)
 
 
+class PersistentValue:
+    def __init__(self, initializer, *args, **kwargs):
+        """Holds mutable state initialized once per process."""
+        self.initializer = initializer
+        self._args = args
+        self._kwargs = kwargs
+        self._value = None
+        self._initialized = False
+
+    def set_args(self, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs
+        self._initialized = False
+
+    def __lt__(self, other):
+        if isinstance(other, tuple):
+            if len(other) == 2 and isinstance(other[1], dict):
+                args, kwargs = other
+                self.set_args(*args, **kwargs)
+            else:
+                self.set_args(*other)
+        elif isinstance(other, dict):
+            self.set_args(**other)
+        else:
+            self.set_args(other)
+
+    def get(self):
+        if not self._initialized:
+            self._value = self.initializer(*self._args, **self._kwargs)
+            self._initialized = True
+        return self._value
+
+    def set(self, value):
+        self._value = value
+        self._initialized = True
+
+

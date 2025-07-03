@@ -4,7 +4,7 @@ from contextlib import AsyncExitStack
 from aioitertools import zip as azip, chain, zip_longest, cycle
 from copy import deepcopy
 from .channel import Channel
-from .port import InputPort, OutputPort, PortHandler
+from .port import InputPort, OutputPort, PortHandler, PersistentValue
 
 
 
@@ -23,7 +23,8 @@ class Component(metaclass = ComponentMeta):
         self.graph=None
         self.inports = set()
         self.outports = set()
-        self._vals = OrderedDict()  # Holds references to both inports and outports
+        self._vals = OrderedDict()  # Holds references to ports and persistent values
+        self._persists = OrderedDict()
         self._runner = None
         self._groups = []
    
@@ -42,7 +43,7 @@ class Component(metaclass = ComponentMeta):
         
         return f"\n{'_'*(max_length+4)}\n| {inports_text_centered} |\n| {component_text_centered} |\n| {outports_text_centered} |\n{'¯'*(max_length+4)}"
 
-    def __getattr__(self,attr):
+    def __getattr__(self, attr):
         return self.ports.get(attr)
 
     def copy(self):
@@ -58,6 +59,12 @@ class Component(metaclass = ComponentMeta):
             for group in self._groups
         ]
 
+        for name, pv in self._persists.items():
+            new_pv = new._persists.get(name)
+            new_pv.set_args(*pv._args, **pv._kwargs)
+            if pv._initialized:
+                new_pv.set(pv._value)
+
         return new
 
     def add_inport(self, port):
@@ -71,6 +78,13 @@ class Component(metaclass = ComponentMeta):
         port.component=self
         self.ports[port.name]=port
         self._vals[port]=port
+
+    def add_persist(self, name, initializer):
+        pv = PersistentValue(initializer)
+        self._persists[name] = pv
+        self.ports[name] = pv
+        self._vals[pv] = pv
+        return pv
 
     def set_runner(self, runner_function):
         self._runner = runner_function
@@ -87,7 +101,12 @@ class Component(metaclass = ComponentMeta):
             async def listener(group):
                 async for values in azip(*group):
                     self._vals.update(zip(group, values))
-                    await self._runner(*self._vals.values())
+                    args = []
+                    for v in self._vals.values():
+                        if isinstance(v, PersistentValue):
+                            v.get()
+                        args.append(v)
+                    await self._runner(*args)
         else:
             async def listener(group):
                 async for values in azip(*group):
@@ -110,6 +129,9 @@ class Component(metaclass = ComponentMeta):
                         break
                 else:
                     self._vals[port] = port.initialization_value
+
+            for pv in self._persists.values():
+                pv.get()
 
             # Check if all ports are initports
             if initports == self.inports:
@@ -149,6 +171,14 @@ def outport(port_name):
         return func
     return decorator
 
+def persist(name, initializer):
+    def decorator(func):
+        if not hasattr(func, '_persists'):
+            func._persists = []
+        func._persists.append((name, initializer))
+        return func
+    return decorator
+
 def component(func):
     class ComponentSubclass(Component):
         def __init__(self, *args, **kwargs):
@@ -157,6 +187,9 @@ def component(func):
                 self.add_inport(InputPort(*args))
             for port_name in getattr(func, '_outports', []):
                 self.add_outport(OutputPort(port_name))
+            self._persists = OrderedDict()
+            for name, init in getattr(func, '_persists', []):
+                self.add_persist(name, init)
             self.set_runner(deepcopy(func))
 
     ComponentSubclass.__name__ = func.__name__
@@ -177,13 +210,13 @@ class ComponentGroup:
 
     def __getattr__(self, attr):
         if not self.ports:
-            for k,v in self.group[0].ports.items():
-                self.ports[k]=PortHandler(k, self)
+            for k in self.group[0].ports.keys():
+                self.ports[k] = PortHandler(k, self)
         return self.ports[attr]
 
     def initialize(self, name, val):
         for comp in self.group:
-            comp.ports[name].__lt__(val)
+            getattr(comp, name).__lt__(val)
 
     def connect(self, src, target):
         """

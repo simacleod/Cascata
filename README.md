@@ -31,7 +31,7 @@ pip3 install cascata
 
 ### Define components
 
-Components in Cascata are defined with three decorators: `@inport`, `@outport`, and `@component`. These decorators are applied to an async function definition, transforming the definition into a Component object. This function accepts the same arguments as the ports. The data from the ports, not the ports themselves, are provided as arguments to the function at runtime. Iteration over the ports is handled internally by the component in a user-defined pattern when building the graph. Thus, the runner function needs only to process data, and send data.
+Components in Cascata are defined with four decorators: `@inport`, `@outport`, `@persist`, and `@component`. These decorators are applied to an async function definition, transforming the definition into a Component object. This function accepts the same arguments as the ports and persistent values. The data from the ports, not the ports themselves, are provided as arguments to the function at runtime. Iteration over the ports is handled internally by the component in a user-defined pattern when building the graph. Thus, the runner function needs only to process data and send data.
 
 ```python
 from cascata import * #imports the @inport, @outport, @component decorators, and the Graph object.
@@ -58,6 +58,18 @@ async def RangeGenerator(range_in, data_out):
 async def DataPrinter(data_in):
 
     print(data_in)
+```
+
+Persistent state can be declared with `@persist`:
+
+```python
+@component
+@inport('image_in')
+@outport('image_out')
+@persist('count', lambda: 0)
+async def count_images(image_in, image_out, count):
+    count.set(count.get() + 1)
+    await image_out.send(image_in)
 ```
 
 ### Build and run a graph
