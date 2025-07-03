@@ -130,8 +130,6 @@ class Component(metaclass = ComponentMeta):
                 else:
                     self._vals[port] = port.initialization_value
 
-            for pv in self._persists.values():
-                pv.get()
 
             # Check if all ports are initports
             if initports == self.inports:
@@ -160,6 +158,9 @@ def inport(port_name, capacity=10, default=None):
         if not hasattr(func, '_inports'):
             func._inports = []
         func._inports.append((port_name, capacity, default))
+        if not hasattr(func, '_val_decls'):
+            func._val_decls = []
+        func._val_decls.insert(0, ('inport', port_name, capacity, default))
         return func
     return decorator
 
@@ -168,6 +169,9 @@ def outport(port_name):
         if not hasattr(func, '_outports'):
             func._outports = []
         func._outports.append(port_name)
+        if not hasattr(func, '_val_decls'):
+            func._val_decls = []
+        func._val_decls.insert(0, ('outport', port_name))
         return func
     return decorator
 
@@ -176,6 +180,9 @@ def persist(name, initializer):
         if not hasattr(func, '_persists'):
             func._persists = []
         func._persists.append((name, initializer))
+        if not hasattr(func, '_val_decls'):
+            func._val_decls = []
+        func._val_decls.insert(0, ('persist', name, initializer))
         return func
     return decorator
 
@@ -183,13 +190,18 @@ def component(func):
     class ComponentSubclass(Component):
         def __init__(self, *args, **kwargs):
             super().__init__(func.__name__)
-            for args in getattr(func, '_inports', []):
-                self.add_inport(InputPort(*args))
-            for port_name in getattr(func, '_outports', []):
-                self.add_outport(OutputPort(port_name))
             self._persists = OrderedDict()
-            for name, init in getattr(func, '_persists', []):
-                self.add_persist(name, init)
+            for decl in getattr(func, '_val_decls', []):
+                kind = decl[0]
+                if kind == 'inport':
+                    _, name, capacity, default = decl
+                    self.add_inport(InputPort(name, capacity, default))
+                elif kind == 'outport':
+                    _, name = decl
+                    self.add_outport(OutputPort(name))
+                elif kind == 'persist':
+                    _, name, init = decl
+                    self.add_persist(name, init)
             self.set_runner(deepcopy(func))
 
     ComponentSubclass.__name__ = func.__name__

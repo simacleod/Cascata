@@ -111,7 +111,7 @@ class PersistentValue:
         self.initializer = initializer
         self._args = args
         self._kwargs = kwargs
-        self._value = None
+        self.value = None
         self._initialized = False
 
     def set_args(self, *args, **kwargs):
@@ -133,12 +133,12 @@ class PersistentValue:
 
     def get(self):
         if not self._initialized:
-            self._value = self.initializer(*self._args, **self._kwargs)
+            self.value = self.initializer(*self._args, **self._kwargs)
             self._initialized = True
-        return self._value
+        return self.value
 
     def set(self, value):
-        self._value = value
+        self.value = value
         self._initialized = True
 
 
