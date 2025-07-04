@@ -135,6 +135,18 @@ class _BatchBuilder:
         return self.outport
 
 
+class _GroupBatchBuilder:
+    """Helper for batching connections from ComponentGroup ports."""
+
+    def __init__(self, handler, size):
+        self.handler = handler
+        self.size = size
+
+    def __ge__(self, inport):
+        self.handler.component.connect_batch(self.handler, inport, self.size)
+        return self.handler
+
+
 class PortHandler:
     def __init__(self, name, parent):
         self.name = name
@@ -143,8 +155,15 @@ class PortHandler:
     def __lt__(self, b):
         self.component.initialize(self.name, b)
 
-    def __rshift__(self, inport):
-        self.component.connect(self, inport)
+    def __rshift__(self, other):
+        if isinstance(other, int):
+            return _GroupBatchBuilder(self, other)
+        self.component.connect(self, other)
+        return self
+
+    def __irshift__(self, inport):
+        self.component.connect_batch(self, inport, 0)
+        return self
 
 
 class PersistentValue:

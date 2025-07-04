@@ -90,3 +90,14 @@ def test_group_with_batch():
     g.pair.sync(g.pair.a, g.pair.b)
     run_graph(g)
     assert result == [(0, [0, 1]), (1, [2, 3])]
+
+def test_group_sends_batch():
+    result = []
+    g = Graph()
+    g.prods = Prod * 2
+    g.prods.initialize('count', 1)
+    g.collect = Collect
+    g.collect.store < result
+    g.prods.o >> 2 >= g.collect.items
+    run_graph(g)
+    assert result == [[0, 0]]

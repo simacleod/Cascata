@@ -292,6 +292,20 @@ class ComponentGroup:
         for j, dst_comp in enumerate(dst_group):
             bridge.ports[f"{target.name}_{j}_out"] >> dst_comp.ports[target.name]
 
+    def connect_batch(self, src, target, size=0):
+        """Connect like :py:meth:`connect` but with batching semantics."""
+        if isinstance(target, PortHandler):
+            if isinstance(target.component, ComponentGroup):
+                for comp in target.component.group:
+                    getattr(comp, target.name).batch_size = size
+            else:
+                getattr(target.component, target.name).batch_size = size
+        elif isinstance(target, InputPort):
+            target.batch_size = size
+        else:
+            raise TypeError("target must be InputPort or PortHandler")
+        self.connect(src, target)
+
 
 class GroupConnector(Component):
     def __init__(self, base, name, M, N):

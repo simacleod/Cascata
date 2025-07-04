@@ -89,6 +89,7 @@ Example batching syntax:
 producer.out >>= collector.items         # all items at once
 producer.out >> 3 >= collector.items    # batches of 3
 ```
+Batching works for connections originating from component groups as well.
 
 ```python
 from cascata import * #imports the @inport, @outport, @component decorators, and the Graph object.
