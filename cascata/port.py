@@ -2,26 +2,28 @@ import asyncio
 from .channel import Channel
 from contextlib import asynccontextmanager, AsyncExitStack
 
+
 class InputPort:
     def __init__(self, name, capacity=100, default=None):
         """
         Initializes an InputPort.
-        
+
         :param name: The name of the InputPort.
         :param initialization_value: The initial value for the port, if any.
         """
         self.name = name
-        self.component=None
+        self.component = None
         self.channel = Channel(capacity)  # Initialize a Channel object
         self.initialization_value = default
+        self.batch_size = None
 
     def __repr__(self):
-        return f'inport {self.component.name}.{self.name}'
+        return f"inport {self.component.name}.{self.name}"
 
     async def put(self, item):
         """
         Puts an item into the channel.
-        
+
         :param item: The item to be put into the channel.
         """
         await self.channel.put(item)
@@ -34,19 +36,34 @@ class InputPort:
         async with self.channel.open() as channel:
             yield channel
 
-    def initialize(self,value):
+    def initialize(self, value):
         """
-            initialize this port with a value
+        initialize this port with a value
         """
-        self.initialization_value=value
+        self.initialization_value = value
 
     def __aiter__(self):
         """
-        Makes InputPort an asynchronous iterable by delegating to the channel's iterator.
+        Makes InputPort an asynchronous iterable.
+        If batch_size is None, items are yielded individually.
+        Otherwise, items are collected and yielded as lists.
         """
-        return self.channel.__aiter__()
+        if self.batch_size is None:
+            return self.channel.__aiter__()
 
-    def __lt__(self,b):
+        async def _gen():
+            batch = []
+            async for item in self.channel:
+                batch.append(item)
+                if self.batch_size and len(batch) >= self.batch_size:
+                    yield batch
+                    batch = []
+            if batch:
+                yield batch
+
+        return _gen()
+
+    def __lt__(self, b):
         self.initialize(b)
 
 
@@ -54,7 +71,7 @@ class OutputPort:
     def __init__(self, name):
         """
         Initializes an OutputPort.
-        
+
         :param name: The name of the OutputPort.
         """
         self.name = name
@@ -64,16 +81,18 @@ class OutputPort:
     @asynccontextmanager
     async def open(self):
         async with AsyncExitStack() as stack:
-            await asyncio.gather(*[stack.enter_async_context(port.open()) for port in self.connections])
+            await asyncio.gather(
+                *[stack.enter_async_context(port.open()) for port in self.connections]
+            )
             yield
 
     def __repr__(self):
-        return f'inport {self.component.name}.{self.name}'
+        return f"inport {self.component.name}.{self.name}"
 
     async def send(self, item):
         """
         Concurrently sends an item to all connected InputPorts.
-        
+
         :param item: The item to be sent.
         """
         await asyncio.gather(*(connection.put(item) for connection in self.connections))
@@ -81,27 +100,50 @@ class OutputPort:
     def connect(self, inport):
         """
         Connects this OutputPort to an InputPort.
-        
+
         :param inport: The InputPort to connect to.
         """
-        inport.initialization_value=None
+        inport.initialization_value = None
         self.component.graph.edge(self, inport)
         if type(inport) is InputPort:
             self.connections.add(inport)
 
-    def __rshift__(self,inport):
+    def connect_batch(self, inport, size=0):
+        """Connect with batching semantics."""
+        inport.batch_size = size
         self.connect(inport)
+
+    def __rshift__(self, other):
+        if isinstance(other, int):
+            return _BatchBuilder(self, other)
+        self.connect(other)
+        return self
+
+    def __irshift__(self, inport):
+        self.connect_batch(inport, 0)
+        return self
+
+
+class _BatchBuilder:
+    def __init__(self, outport, size):
+        self.outport = outport
+        self.size = size
+
+    # allow syntax outport >> n >= inport
+    def __ge__(self, inport):
+        self.outport.connect_batch(inport, self.size)
+        return self.outport
 
 
 class PortHandler:
     def __init__(self, name, parent):
         self.name = name
         self.component = parent
-    
-    def __lt__(self,b):
+
+    def __lt__(self, b):
         self.component.initialize(self.name, b)
 
-    def __rshift__(self,inport):
+    def __rshift__(self, inport):
         self.component.connect(self, inport)
 
 
@@ -140,5 +182,3 @@ class PersistentValue:
     def set(self, value):
         self.value = value
         self._initialized = True
-
-

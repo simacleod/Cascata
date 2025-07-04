@@ -120,7 +120,7 @@ Primitives used by components to communicate through `Channel` objects.
 - `put(item)` – forward an item to the channel.
 - `open()` – async context manager delegating to the channel.
 - `initialize(value)` – set the initial value delivered before consumption.
-- `__aiter__()` – iterate over items from the channel.
+- `__aiter__()` – iterate over items from the channel; yields lists when batching is enabled.
 - `__lt__(value)` – syntax sugar for `initialize` in graph DSL.
 
 ### Class `OutputPort`
@@ -129,7 +129,9 @@ Primitives used by components to communicate through `Channel` objects.
 - `__repr__()` – identifier similar to `InputPort.__repr__`.
 - `send(item)` – send an item to all connected inputs.
 - `connect(inport)` – register a connection and notify the graph.
-- `__rshift__(inport)` – operator alias for `connect`.
+- `__rshift__(inport or int)` – connect to an input or, when given an int, set a batch size for later `>=`.
+- `__irshift__(inport)` – connect and batch all sends into a single list.
+  Combine them as `out >> n >= inport` to deliver fixed-size batches.
 
 ### Class `PortHandler`
 - `__init__(name, parent)` – store the port name and owning group.

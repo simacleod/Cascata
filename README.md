@@ -80,6 +80,15 @@ Graphs in Cascata are defined with a simple shorthand DSL:
 * assigning a component to a graph will inject its name into the local namespace.
 * the less-than operator `<` is used to initialize ports of a component: `increment_numbers_instance.constant_in < 2`
 * the right-shift operator `>>` is used to connect components: `increment_numbers_instance.data_out >> print_data.data_in`
+* the augmented right-shift `>>=` connects ports and delivers all outputs as a single list
+* use `out_port >> N >= in_port` to batch every `N` sends into a list
+
+Example batching syntax:
+
+```python
+producer.out >>= collector.items         # all items at once
+producer.out >> 3 >= collector.items    # batches of 3
+```
 
 ```python
 from cascata import * #imports the @inport, @outport, @component decorators, and the Graph object.
