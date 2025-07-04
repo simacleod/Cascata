@@ -221,6 +221,7 @@ def component(func):
             self.set_runner(deepcopy(func))
 
     ComponentSubclass.__name__ = func.__name__
+    ComponentSubclass.__module__ = func.__module__    
     return ComponentSubclass
 
 

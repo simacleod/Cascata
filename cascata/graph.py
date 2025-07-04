@@ -149,7 +149,10 @@ class Graph:
         new.__dict__['parent'] = self
         self.nodes = {**self.nodes, **new.nodes}
         self.edges += new.edges
-        self.networkx_graph=nx.union(self.networkx_graph, new.networkx_graph)
+        for node, data in new.networkx_graph.nodes(data=True):
+            self.networkx_graph.add_node(node, **data)
+        for u, v in new.networkx_graph.edges:
+            self.networkx_graph.add_edge(u, v)
         self._local_namespace[name] = new
         self.__dict__[name]=new
 
@@ -295,7 +298,10 @@ class Graph:
             sub.parent = g
             g.nodes.update(sub.nodes)
             g.edges.extend(sub.edges)
-            g.networkx_graph = nx.union(g.networkx_graph, sub.networkx_graph)
+            for node, data2 in sub.networkx_graph.nodes(data=True):
+                g.networkx_graph.add_node(node, **data2)
+            for u, v in sub.networkx_graph.edges:
+                g.networkx_graph.add_edge(u, v)
             g.__dict__[alias] = sub
             g._local_namespace[alias] = sub
 
@@ -344,6 +350,15 @@ class Graph:
             else:
                 port = getattr(g.nodes[info["component"]], info["port"])
             g._exports[name] = port
+        
+        serialized_names = set(data.get("nodes", {}).keys())
+        for subdata in data.get("subgraphs", {}).values():
+            serialized_names.update(subdata.get("nodes", {}).keys())
+        extra = [n for n in list(g.nodes.keys()) if n not in serialized_names]
+        for name in extra:
+            comp = g.nodes.pop(name)
+            if g.networkx_graph.has_node(comp):
+                g.networkx_graph.remove_node(comp)
 
         return g
 
