@@ -212,6 +212,141 @@ class Graph:
         return new
 
 
+    def to_json(self):
+        def encode_init(val):
+            if isinstance(val, OutputPort):
+                return {"component": val.component.name, "port": val.name}
+            return val
+
+        nodes = {}
+        for name, comp in self.nodes.items():
+            info = {
+                "module": comp.__class__.__module__,
+                "class": comp.__class__.__name__,
+                "group": comp.group_name,
+                "inports": {
+                    ip.name: {
+                        "capacity": getattr(ip.channel, "capacity", None),
+                        "initial": encode_init(ip.initialization_value),
+                        "batch_size": ip.batch_size,
+                    }
+                    for ip in comp.inports
+                },
+            }
+            if hasattr(comp, "M") and hasattr(comp, "N"):
+                info["M"] = comp.M
+                info["N"] = comp.N
+                info["port_name"] = getattr(comp, "port_name", None)
+            nodes[name] = info
+
+        edges = [
+            [o.component.name, o.name, i.component.name, i.name]
+            for o, i in self.edges
+            if o.component.graph is self or i.component.graph is self
+        ]
+
+        groups = {
+            alias: {
+                "module": grp.comp_cls.__module__,
+                "class": grp.comp_cls.__name__,
+                "count": grp.count,
+            }
+            for alias, grp in self.group_handles.items()
+        }
+
+        exports = {}
+        for name, port in self._exports.items():
+            if isinstance(port.component, ComponentGroup):
+                exports[name] = {"group": port.component.name, "port": port.name}
+            else:
+                exports[name] = {
+                    "component": port.component.name,
+                    "port": port.name,
+                }
+
+        subgraphs = {
+            alias: sg.to_json()
+            for alias, sg in self.__dict__.items()
+            if isinstance(sg, Graph) and sg.is_subgraph
+        }
+
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "group_handles": groups,
+            "exports": exports,
+            "subgraphs": subgraphs,
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        import importlib
+
+        def load_cls(mod, name):
+            module = importlib.import_module(mod)
+            return getattr(module, name)
+
+        g = cls()
+
+        # subgraphs first
+        for alias, subdata in data.get("subgraphs", {}).items():
+            sub = cls.from_json(subdata)
+            sub.is_subgraph = True
+            sub.parent = g
+            g.nodes.update(sub.nodes)
+            g.edges.extend(sub.edges)
+            g.networkx_graph = nx.union(g.networkx_graph, sub.networkx_graph)
+            g.__dict__[alias] = sub
+            g._local_namespace[alias] = sub
+
+        # groups
+        for alias, info in data.get("group_handles", {}).items():
+            comp_cls = load_cls(info["module"], info["class"])
+            group = ComponentGroup(comp_cls, info["count"])
+            g._add_component_group(alias, group)
+
+        # components
+        for name, info in data.get("nodes", {}).items():
+            if name in g.nodes:
+                comp = g.nodes[name]
+            else:
+                comp_cls = load_cls(info["module"], info["class"])
+                if comp_cls.__name__ == "GroupConnector":
+                    comp = comp_cls(name, info.get("port_name"), info.get("M"), info.get("N"))
+                else:
+                    comp = comp_cls(name)
+                g.node(name, comp)
+
+            for ip_name, ip_info in info.get("inports", {}).items():
+                ip = getattr(comp, ip_name)
+                val = ip_info.get("initial")
+                if isinstance(val, dict) and "component" in val:
+                    src = g.nodes[val["component"]]
+                    val = getattr(src, val["port"])
+                ip.initialization_value = val
+                ip.batch_size = ip_info.get("batch_size")
+                cap = ip_info.get("capacity")
+                if cap is not None:
+                    ip.channel.capacity = cap
+
+        for out_c, out_p, in_c, in_p in data.get("edges", []):
+            src = getattr(g.nodes[out_c], out_p)
+            dst = getattr(g.nodes[in_c], in_p)
+            dst.initialization_value = None
+            if isinstance(dst, InputPort):
+                src.connections.add(dst)
+            g.edges.append((src, dst))
+            g.networkx_graph.add_edge(src.component, dst.component)
+
+        for name, info in data.get("exports", {}).items():
+            if "group" in info:
+                port = getattr(g.group_handles[info["group"]], info["port"])
+            else:
+                port = getattr(g.nodes[info["component"]], info["port"])
+            g._exports[name] = port
+
+        return g
+
     def _break_cycles(self):
         """
         Breaks cycles in the graph for BFS coloring.

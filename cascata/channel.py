@@ -8,6 +8,7 @@ from multiprocessing import Manager
 class Channel:
 
     def __init__(self, capacity):
+        self.capacity = capacity
         mgr = Manager()
         self._items = mgr.list()
         self.sender_count = multiprocessing.Value('i', 0)

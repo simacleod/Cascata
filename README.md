@@ -179,6 +179,24 @@ graph.run()
 
 Grouping handles one-to-many and many-to-one wiring under the hood, with automatic `GroupConnector` insertion.
 
+## Graph Serialization
+
+Graphs can be serialized to a JSON compatible dictionary and later restored.
+
+```python
+g = Graph()
+g.worker = WorkerComponent
+data = g.to_json()
+with open('graph.json', 'w') as f:
+    json.dump(data, f)
+
+# Later
+with open('graph.json') as f:
+    g2 = Graph.from_json(json.load(f))
+```
+
+Subgraphs and component groups are fully preserved by the round trip.
+
 ## Logger
 
 Cascata includes a built-in, **context-aware logger** (`cascata.log`) that automatically tags log messages with component context and process ID. Simply import and use:

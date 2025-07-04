@@ -13,6 +13,7 @@ class InputPort:
         """
         self.name = name
         self.component = None
+        self.capacity = capacity
         self.channel = Channel(capacity)  # Initialize a Channel object
         self.initialization_value = default
         self.batch_size = None
