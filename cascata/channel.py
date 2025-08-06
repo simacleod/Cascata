@@ -1,7 +1,5 @@
 import asyncio
-import pickle
 import multiprocessing
-import time
 from contextlib import asynccontextmanager
 from multiprocessing import Manager
 
@@ -15,6 +13,7 @@ class Channel:
         self._start_event = multiprocessing.Event()
         self._close_event = multiprocessing.Event()
         self._item_event = multiprocessing.Event()
+        self._sem = multiprocessing.Semaphore(capacity)
         self._buf = []
         self._idx = 0
 
@@ -34,6 +33,9 @@ class Channel:
                     self._item_event.set()
 
     async def put(self, item):
+        if not self._sem.acquire(False):
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._sem.acquire)
         self._items.append(item)
         self._item_event.set()
 
@@ -47,19 +49,18 @@ class Channel:
         if not self._start_event.is_set():
             await loop.run_in_executor(None, self._start_event.wait)
         if self._buf:
-            return self._buf.pop(0)
+            item = self._buf.pop(0)
+            self._sem.release()
+            return item
         new_items = self._items[self._idx:]
         if new_items:
             self._idx += len(new_items)
             self._buf = new_items
-            return self._buf.pop(0)
+            item = self._buf.pop(0)
+            self._sem.release()
+            return item
         if self._close_event.is_set():
             raise StopAsyncIteration
         self._item_event.clear()
-        async def _wait():
-            while True:
-                if self._item_event.is_set() or self._close_event.is_set():
-                    return
-                await asyncio.sleep(0.001)
-        await _wait()
+        await loop.run_in_executor(None, self._item_event.wait)
         return await self.__anext__()
