@@ -7,6 +7,18 @@ from typing import get_type_hints
 from .channel import Channel
 from .port import InputPort, OutputPort, PortHandler, PersistentValue
 
+# Registry for component metadata
+component_registry = {}
+
+
+def _registry_insert(module_path, component_name, metadata):
+    """Insert component metadata into the nested registry."""
+    parts = module_path.split(".")
+    node = component_registry
+    for part in parts:
+        node = node.setdefault(part, {})
+    node[component_name] = metadata
+
 
 class ComponentMeta(type):
     def __mul__(cls, count):
@@ -228,7 +240,25 @@ def component(func):
             self.set_runner(deepcopy(func))
 
     ComponentSubclass.__name__ = func.__name__
-    ComponentSubclass.__module__ = func.__module__    
+    ComponentSubclass.__module__ = func.__module__
+    # Register component metadata
+    inports_meta = {}
+    outports_meta = {}
+    for decl in getattr(func, "_val_decls", []):
+        kind = decl[0]
+        if kind == "inport":
+            _, name, _, _ = decl
+            inports_meta[name] = annotations.get(name)
+        elif kind == "outport":
+            _, name = decl
+            outports_meta[name] = annotations.get(name)
+    metadata = {
+        "module": func.__module__,
+        "inports": inports_meta,
+        "outports": outports_meta,
+    }
+    _registry_insert(func.__module__, func.__name__, metadata)
+
     return ComponentSubclass
 
 
