@@ -17,6 +17,7 @@ class InputPort:
         self.channel = Channel(capacity)  # Initialize a Channel object
         self.initialization_value = default
         self.batch_size = None
+        self.type = None
 
     def __repr__(self):
         return f"inport {self.component.name}.{self.name}"
@@ -78,6 +79,7 @@ class OutputPort:
         self.name = name
         self.component = None
         self.connections = set()  # List to store connections to InputPorts
+        self.type = None
 
     @asynccontextmanager
     async def open(self):
@@ -105,6 +107,11 @@ class OutputPort:
         :param inport: The InputPort to connect to.
         """
         inport.initialization_value = None
+        if getattr(self, "type", None) is not None and getattr(inport, "type", None) is not None:
+            if self.type != inport.type:
+                raise TypeError(
+                    f"Cannot connect {self} ({self.type}) to {inport} ({inport.type})"
+                )
         self.component.graph.edge(self, inport)
         if type(inport) is InputPort:
             self.connections.add(inport)

@@ -3,6 +3,7 @@ from collections import OrderedDict
 from contextlib import AsyncExitStack
 from aioitertools import zip as azip, chain, zip_longest, cycle
 from copy import deepcopy
+from typing import get_type_hints
 from .channel import Channel
 from .port import InputPort, OutputPort, PortHandler, PersistentValue
 
@@ -203,6 +204,8 @@ def persist(name, initializer):
 
 
 def component(func):
+    annotations = get_type_hints(func)
+
     class ComponentSubclass(Component):
         def __init__(self, *args, **kwargs):
             super().__init__(func.__name__)
@@ -211,10 +214,14 @@ def component(func):
                 kind = decl[0]
                 if kind == "inport":
                     _, name, capacity, default = decl
-                    self.add_inport(InputPort(name, capacity, default))
+                    port = InputPort(name, capacity, default)
+                    port.type = annotations.get(name)
+                    self.add_inport(port)
                 elif kind == "outport":
                     _, name = decl
-                    self.add_outport(OutputPort(name))
+                    port = OutputPort(name)
+                    port.type = annotations.get(name)
+                    self.add_outport(port)
                 elif kind == "persist":
                     _, name, init = decl
                     self.add_persist(name, init)

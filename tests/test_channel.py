@@ -25,7 +25,7 @@ def consumer_proc(channel, queue):
     asyncio.run(_run())
 
 def test_channel_multi_process():
-    channel = Channel(capacity=1000)
+    channel = Channel(capacity=10000)
     q1 = multiprocessing.Queue()
     q2 = multiprocessing.Queue()
 
