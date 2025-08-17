@@ -242,16 +242,24 @@ def component(func):
     ComponentSubclass.__name__ = func.__name__
     ComponentSubclass.__module__ = func.__module__
     # Register component metadata
+    # Use the explicit _inports and _outports declarations captured by the
+    # decorators so that the registry retains the port names as well as their
+    # properties (e.g. capacity, default value and type annotations).  Prior to
+    # this the registry only stored bare type information which meant port names
+    # were effectively dropped from the registry making introspection
+    # impossible.
     inports_meta = {}
+    for name, capacity, default in getattr(func, "_inports", []):
+        inports_meta[name] = {
+            "type": annotations.get(name),
+            "capacity": capacity,
+            "default": default,
+        }
+
     outports_meta = {}
-    for decl in getattr(func, "_val_decls", []):
-        kind = decl[0]
-        if kind == "inport":
-            _, name, _, _ = decl
-            inports_meta[name] = annotations.get(name)
-        elif kind == "outport":
-            _, name = decl
-            outports_meta[name] = annotations.get(name)
+    for name in getattr(func, "_outports", []):
+        outports_meta[name] = {"type": annotations.get(name)}
+
     metadata = {
         "module": func.__module__,
         "inports": inports_meta,
