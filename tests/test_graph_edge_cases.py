@@ -9,25 +9,6 @@ from cascata import component, inport, outport, Graph
 from cascata.port import PersistentValue
 from cascata.log import log
 
-# simple helper similar to other tests
-class DummyProcess:
-    def __init__(self, target):
-        self.target = target
-    def start(self):
-        self.target()
-    def join(self):
-        pass
-    def terminate(self):
-        pass
-
-def run_graph(graph, process_cls=DummyProcess):
-    original = multiprocessing.Process
-    multiprocessing.Process = process_cls
-    try:
-        graph.run(1)
-    finally:
-        multiprocessing.Process = original
-
 @component
 @outport('o')
 async def Prod(o):
@@ -217,8 +198,9 @@ def test_shard_branches():
 
 
 def test_join_keyboard_interrupt(monkeypatch, caplog):
-    class KIProcess(DummyProcess):
+    class KIProcess(multiprocessing.Process):
         def join(self):
+            super().join()
             raise KeyboardInterrupt
     caplog.set_level('WARNING')
     g = Graph()
@@ -227,7 +209,8 @@ def test_join_keyboard_interrupt(monkeypatch, caplog):
     from io import StringIO
     stream = StringIO()
     monkeypatch.setattr(handler, 'stream', stream)
-    run_graph(g, process_cls=KIProcess)
+    monkeypatch.setattr(multiprocessing, 'Process', KIProcess)
+    g.run(1)
     assert 'Graph execution cancelled' in stream.getvalue()
 
 
@@ -249,12 +232,5 @@ def test_start_default_workers(monkeypatch):
     g = Graph()
     g.p = Prod
     monkeypatch.setattr(multiprocessing, 'cpu_count', lambda: 1)
-    class Proc(DummyProcess):
-        pass
-    original = multiprocessing.Process
-    multiprocessing.Process = Proc
-    try:
-        g.start()
-        g.join()
-    finally:
-        multiprocessing.Process = original
+    g.start()
+    g.join()

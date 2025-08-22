@@ -27,27 +27,6 @@ async def Forward(inp, out):
 async def Collector(item, store):
     store.get().append(item)
 
-# Utility to run a graph synchronously by patching multiprocess.Process
-class DummyProcess:
-    def __init__(self, target):
-        self.target = target
-    def start(self):
-        self.target()
-    def join(self):
-        pass
-    def terminate(self):
-        pass
-
-
-def run_graph(graph, num_workers=1):
-    # Patch multiprocess.Process so workers execute inline for coverage
-    original = multiprocessing.Process
-    multiprocessing.Process = DummyProcess
-    try:
-        graph.run(num_workers)
-    finally:
-        multiprocessing.Process = original
-
 
 def test_component_creation():
     p = Producer('prod')
@@ -70,7 +49,7 @@ def test_graph_creation_and_run():
     g.producer.out >> g.forward.inp
     g.forward.out >> g.collector.item
 
-    run_graph(g, num_workers=1)
+    g.run(1)
 
     assert list(result) == list(range(5))
 
@@ -90,7 +69,7 @@ def test_graph_with_subgraph():
 
     g.sub.out >> g.collector.item
 
-    run_graph(g, num_workers=1)
+    g.run(1)
 
     assert list(result) == list(range(5))
 
@@ -107,7 +86,7 @@ def test_grouped_components():
     g.prods.out >> g.colls.item
     g.prods.initialize('count', 2)
 
-    run_graph(g, num_workers=1)
+    g.run(1)
 
     assert sorted(result) == [0, 0, 1, 1]
 
@@ -128,7 +107,7 @@ def test_subgraph_and_grouped_components():
     g.sub.out >> g.colls.item
     g.colls.store < result
 
-    run_graph(g, num_workers=1)
+    g.run(1)
 
     assert sorted(result) == list(range(5))
 
@@ -154,7 +133,7 @@ def test_subgraph_with_group_inside():
     g.producer = Producer
     g.producer.count < 0  # avoid extra output
 
-    run_graph(g, num_workers=1)
+    g.run(1)
 
     assert sorted(result) == [0, 0, 1, 1]
 
@@ -175,6 +154,6 @@ def test_subgraph_exporting_group_port():
 
     g.sub.out >> g.colls.item
 
-    run_graph(g, num_workers=1)
+    g.run(1)
 
     assert sorted(result) == [0, 0, 1, 1]

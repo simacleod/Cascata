@@ -223,6 +223,11 @@ class Graph:
 
         nodes = {}
         for name, comp in self.nodes.items():
+            # Skip individual members of ComponentGroup; they are captured via
+            # a single entry in ``group_handles`` below.
+            if comp.group_name is not None:
+                continue
+
             info = {
                 "module": comp.__class__.__module__,
                 "class": comp.__class__.__name__,
@@ -248,14 +253,22 @@ class Graph:
             if o.component.graph is self or i.component.graph is self
         ]
 
-        groups = {
-            alias: {
+        groups = {}
+        for alias, grp in self.group_handles.items():
+            first = grp.group[0]
+            groups[alias] = {
                 "module": grp.comp_cls.__module__,
                 "class": grp.comp_cls.__name__,
                 "count": grp.count,
+                "inports": {
+                    ip.name: {
+                        "capacity": getattr(ip.channel, "capacity", None),
+                        "initial": encode_init(ip.initialization_value),
+                        "batch_size": ip.batch_size,
+                    }
+                    for ip in first.inports
+                },
             }
-            for alias, grp in self.group_handles.items()
-        }
 
         exports = {}
         for name, port in self._exports.items():
@@ -311,6 +324,19 @@ class Graph:
             group = ComponentGroup(comp_cls, info["count"])
             g._add_component_group(alias, group)
 
+            for comp in group.group:
+                for ip_name, ip_info in info.get("inports", {}).items():
+                    ip = getattr(comp, ip_name)
+                    val = ip_info.get("initial")
+                    if isinstance(val, dict) and "component" in val:
+                        src = g.nodes[val["component"]]
+                        val = getattr(src, val["port"])
+                    ip.initialization_value = val
+                    ip.batch_size = ip_info.get("batch_size")
+                    cap = ip_info.get("capacity")
+                    if cap is not None:
+                        ip.channel.capacity = cap
+
         # components
         for name, info in data.get("nodes", {}).items():
             if name in g.nodes:
@@ -352,8 +378,14 @@ class Graph:
             g._exports[name] = port
         
         serialized_names = set(data.get("nodes", {}).keys())
+        for alias, info in data.get("group_handles", {}).items():
+            serialized_names.update(f"{alias}_{i}" for i in range(info.get("count", 0)))
         for subdata in data.get("subgraphs", {}).values():
             serialized_names.update(subdata.get("nodes", {}).keys())
+            for alias, info in subdata.get("group_handles", {}).items():
+                serialized_names.update(
+                    f"{alias}_{i}" for i in range(info.get("count", 0))
+                )
         extra = [n for n in list(g.nodes.keys()) if n not in serialized_names]
         for name in extra:
             comp = g.nodes.pop(name)
@@ -540,7 +572,7 @@ class Graph:
             for p in self.processes:
                 p.join()
         except KeyboardInterrupt:
-            log.warn("\nGraph execution cancelled by user.")
+            log.warning("\nGraph execution cancelled by user.")
         finally:
             for p in self.processes:
                 p.terminate()
@@ -563,7 +595,7 @@ class Graph:
         - Outports on bottom, with equal column spans
         """
         if not Digraph:
-            log.warn('to_dot requires graphviz:\n    pip install graphviz')
+            log.warning('to_dot requires graphviz:\n    pip install graphviz')
             return
 
         dot = Digraph(

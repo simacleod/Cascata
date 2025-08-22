@@ -1,8 +1,8 @@
 import asyncio
-import multiprocess as multiprocessing
 import os
 import sys
 import logging
+import tempfile
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
@@ -10,26 +10,6 @@ from cascata import Graph, inport, outport, component, persist
 from cascata.graph import GraphWorker, DeadlockError, Digraph
 from cascata.port import InputPort, OutputPort, PortHandler, PersistentValue
 from cascata.log import log, _get_component_color
-
-# Utility patch similar to other tests
-class DummyProcess:
-    def __init__(self, target):
-        self.target = target
-    def start(self):
-        self.target()
-    def join(self):
-        pass
-    def terminate(self):
-        pass
-
-
-def run_graph(graph, workers=1):
-    orig = multiprocessing.Process
-    multiprocessing.Process = DummyProcess
-    try:
-        graph.run(workers)
-    finally:
-        multiprocessing.Process = orig
 
 # Simple components
 @component
@@ -176,27 +156,25 @@ def test_to_dot_initial_values():
 def test_logging_context_and_error(monkeypatch):
     g = Graph()
     g.l = Logger
-    from io import StringIO
-    stream = StringIO()
     handler = log.handlers[0]
-    monkeypatch.setattr(handler, 'stream', stream)
-    run_graph(g)
-    assert 'Logger' in stream.getvalue()
-
-    class BadStream(list):
-        def write(self, msg):
-            raise ValueError
+    with tempfile.TemporaryFile(mode='w+') as stream:
+        monkeypatch.setattr(handler, 'stream', stream)
+        g.run(1)
+        stream.seek(0)
+        assert 'Logger' in stream.read()
 
 
-def test_graphworker_exception_logging(capfd):
-    from io import StringIO
-    stream = StringIO()
+
+def test_graphworker_exception_logging():
     handler = log.handlers[0]
     old_stream = handler.stream
-    handler.stream = stream
-    g = Graph()
-    g.f = Fail
-    run_graph(g)
+    with tempfile.TemporaryFile(mode='w+') as stream:
+        handler.stream = stream
+        g = Graph()
+        g.f = Fail
+        g.run(1)
+        stream.seek(0)
+        content = stream.read()
     handler.stream = old_stream
-    assert 'Exception in GraphWorker' in stream.getvalue()
+    assert 'Exception in GraphWorker' in content
 

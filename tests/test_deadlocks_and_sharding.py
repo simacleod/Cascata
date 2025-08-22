@@ -1,5 +1,4 @@
 import asyncio
-import multiprocess as multiprocessing
 import os
 import sys
 
@@ -20,25 +19,6 @@ async def Echo(inp, out):
 @inport('inp')
 async def Sink(inp):
     pass
-
-# Utility similar to run_graph from other tests
-class DummyProcess:
-    def __init__(self, target):
-        self.target = target
-    def start(self):
-        self.target()
-    def join(self):
-        pass
-    def terminate(self):
-        pass
-
-def run_graph(graph, num_workers=1):
-    original = multiprocessing.Process
-    multiprocessing.Process = DummyProcess
-    try:
-        graph.run(num_workers)
-    finally:
-        multiprocessing.Process = original
 
 
 def test_component_repr():
