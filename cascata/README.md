@@ -89,6 +89,101 @@ Defines the `Graph` container and helpers for sharding and execution.
 - `__init__()` – create an empty worker.
 - `run()` – run all assigned components in its own event loop.
 
+### Graph Serialization
+
+Graphs can be serialized to a JSON compatible dictionary and later restored.
+
+```python
+g = Graph()
+g.worker = WorkerComponent
+data = g.to_json()
+with open('graph.json', 'w') as f:
+    json.dump(data, f)
+
+# Later
+with open('graph.json') as f:
+    g2 = Graph.from_json(json.load(f))
+```
+
+Subgraphs and component groups are fully preserved by the round trip.
+
+#### JSON schema
+
+`Graph.to_json()` returns a JSON-serializable dictionary with the following
+structure.  Placeholders wrapped in angle brackets represent arbitrary values
+that vary per graph.
+
+```json
+{
+  "nodes": {
+    "<component_name>": {
+      "module": "<import path>",
+      "class": "<class name>",
+      "group": "<group alias|null>",
+      "inports": {
+        "<port_name>": {
+          "capacity": <int|null>,
+          "initial": <JSON value or {"component": "<name>", "port": "<name>"}>,
+          "batch_size": <int|null>
+        },
+        "...": "..."
+      }
+    },
+    "...": "..."
+  },
+  "edges": [
+    ["<src_name>", "<src_port>", "<dst_name>", "<dst_port>"],
+    "..."
+  ],
+  "group_handles": {
+    "<alias>": {
+      "module": "<import path>",
+      "class": "<class name>",
+      "count": <int>,
+      "inports": {
+        "<port_name>": {
+          "capacity": <int|null>,
+          "initial": <JSON value or {"component": "<name>", "port": "<name>"}>,
+          "batch_size": <int|null>
+        },
+        "...": "..."
+      }
+    },
+    "...": "..."
+  },
+  "exports": {
+    "<attr_name>": {
+      "component": "<component>",
+      "port": "<port>"
+    } |
+    {
+      "group": "<group>",
+      "port": "<port>"
+    },
+    "...": "..."
+  },
+  "subgraphs": {
+    "<name>": { /* nested graph using this schema */ },
+    "...": "..."
+  }
+}
+```
+
+* **`nodes`** – descriptors for every standalone component in the graph.
+* **`edges`** – list of connections; each item is the quartet
+  `[src_name, src_port, dst_name, dst_port]`. `src_name` and `dst_name`
+  may reference either a component or a component-group alias. Any
+  necessary `GroupConnector` components are reintroduced automatically
+  when deserializing and are not represented in this schema.
+* **`group_handles`** – component group definitions; each mirrors a component
+  descriptor and describes the first member of the group.
+* **`exports`** – exported ports.  Each entry references either a component or a
+  component group as shown above.
+* **`subgraphs`** – mapping of attribute names to nested graphs, each encoded
+  with the same schema.
+
+`Graph.from_json()` consumes this structure to recreate an equivalent graph.
+
 ## log.py
 Custom logging utilities providing context-aware output.
 

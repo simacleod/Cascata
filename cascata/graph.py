@@ -225,7 +225,7 @@ class Graph:
         for name, comp in self.nodes.items():
             # Skip individual members of ComponentGroup; they are captured via
             # a single entry in ``group_handles`` below.
-            if comp.group_name is not None:
+            if comp.group_name is not None or isinstance(comp, GroupConnector):
                 continue
 
             info = {
@@ -241,17 +241,26 @@ class Graph:
                     for ip in comp.inports
                 },
             }
-            if hasattr(comp, "M") and hasattr(comp, "N"):
-                info["M"] = comp.M
-                info["N"] = comp.N
-                info["port_name"] = getattr(comp, "port_name", None)
             nodes[name] = info
 
-        edges = [
-            [o.component.name, o.name, i.component.name, i.name]
-            for o, i in self.edges
-            if o.component.graph is self or i.component.graph is self
-        ]
+        edgeset = set()
+        for o, i in self.edges:
+            if isinstance(o.component, GroupConnector) or isinstance(i.component, GroupConnector):
+                continue
+            src = o.component.group_name or o.component.name
+            dst = i.component.group_name or i.component.name
+            edgeset.add((src, o.name, dst, i.name))
+
+        for conn in (c for c in self.nodes.values() if isinstance(c, GroupConnector)):
+            ups = [o for o, inp in self.edges if inp.component is conn]
+            downs = [inp for outp, inp in self.edges if outp.component is conn]
+            if not ups or not downs:
+                continue
+            src = ups[0].component.group_name or ups[0].component.name
+            dst = downs[0].component.group_name or downs[0].component.name
+            edgeset.add((src, ups[0].name, dst, downs[0].name))
+
+        edges = [list(e) for e in sorted(edgeset)]
 
         groups = {}
         for alias, grp in self.group_handles.items():
@@ -343,10 +352,7 @@ class Graph:
                 comp = g.nodes[name]
             else:
                 comp_cls = load_cls(info["module"], info["class"])
-                if comp_cls.__name__ == "GroupConnector":
-                    comp = comp_cls(name, info.get("port_name"), info.get("M"), info.get("N"))
-                else:
-                    comp = comp_cls(name)
+                comp = comp_cls(name)
                 g.node(name, comp)
 
             for ip_name, ip_info in info.get("inports", {}).items():
@@ -362,13 +368,15 @@ class Graph:
                     ip.channel.capacity = cap
 
         for out_c, out_p, in_c, in_p in data.get("edges", []):
-            src = getattr(g.nodes[out_c], out_p)
-            dst = getattr(g.nodes[in_c], in_p)
-            dst.initialization_value = None
-            if isinstance(dst, InputPort):
-                src.connections.add(dst)
-            g.edges.append((src, dst))
-            g.networkx_graph.add_edge(src.component, dst.component)
+            if out_c in g.group_handles:
+                src = getattr(g.group_handles[out_c], out_p)
+            else:
+                src = getattr(g.nodes[out_c], out_p)
+            if in_c in g.group_handles:
+                dst = getattr(g.group_handles[in_c], in_p)
+            else:
+                dst = getattr(g.nodes[in_c], in_p)
+            src >> dst
 
         for name, info in data.get("exports", {}).items():
             if "group" in info:
@@ -386,7 +394,11 @@ class Graph:
                 serialized_names.update(
                     f"{alias}_{i}" for i in range(info.get("count", 0))
                 )
-        extra = [n for n in list(g.nodes.keys()) if n not in serialized_names]
+        extra = [
+            n
+            for n in list(g.nodes.keys())
+            if n not in serialized_names and not isinstance(g.nodes[n], GroupConnector)
+        ]
         for name in extra:
             comp = g.nodes.pop(name)
             if g.networkx_graph.has_node(comp):

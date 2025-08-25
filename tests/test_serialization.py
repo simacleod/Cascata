@@ -47,6 +47,10 @@ def test_graph_to_from_json_roundtrip():
     assert ginfo['inports']['i']['capacity'] == 5
     assert ginfo['inports']['i']['batch_size'] == 2
 
+    # group connectors should not be serialized
+    assert all(info['class'] != 'GroupConnector' for info in data['nodes'].values())
+    assert data['edges'] == [['p', 'o', 'consumers', 'i']]
+
 
     g2 = Graph.from_json(data)
 
@@ -82,6 +86,8 @@ def test_subgraph_group_serialization():
     assert 'consumers_0' not in data['nodes']
     assert data['group_handles']['consumers']['count'] == 3
     assert data['group_handles']['consumers']['inports']['i']['batch_size'] == 4
+    assert all(info['class'] != 'GroupConnector' for info in data['nodes'].values())
+    assert data['edges'] == [['prods', 'o', 'consumers', 'i']]
 
     sg2 = Graph.from_json(data)
     assert set(sg.nodes.keys()) == set(sg2.nodes.keys())
