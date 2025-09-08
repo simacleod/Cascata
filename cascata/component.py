@@ -101,6 +101,54 @@ class Component(metaclass=ComponentMeta):
     def set_runner(self, runner_function):
         self._runner = runner_function
 
+    @classmethod
+    def test(cls, **kwargs):
+        """Execute the component's runner with provided inport values.
+
+        Keyword arguments must supply a value for every inport of the
+        component.  Outports are replaced with dummy ports that simply
+        collect the items sent to them.  The collected items are returned
+        as a ``dict`` keyed by outport name.
+
+        Example
+        -------
+        >>> @component
+        ... @inport('x')
+        ... @outport('y')
+        ... async def dup(x, y):
+        ...     await y.send(x)
+        >>> dup.test(x=1)
+        {'y': [1]}
+        """
+
+        instance = cls(cls.__name__)
+
+        class _Collector:
+            def __init__(self):
+                self.items = []
+
+            async def send(self, item):
+                self.items.append(item)
+
+        outputs = {}
+        args = []
+        for port in instance._vals.keys():
+            if isinstance(port, InputPort):
+                if port.name not in kwargs:
+                    raise TypeError(f"Missing value for inport '{port.name}'")
+                args.append(kwargs[port.name])
+            elif isinstance(port, OutputPort):
+                collector = _Collector()
+                outputs[port.name] = collector
+                args.append(collector)
+            elif isinstance(port, PersistentValue):
+                port.get()
+                args.append(port)
+
+        asyncio.run(instance._runner(*args))
+
+        return {name: collector.items for name, collector in outputs.items()}
+
     def clk(self, *ports):
         for port in ports:
             self._groups.append((port,))

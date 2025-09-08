@@ -72,6 +72,16 @@ async def count_images(image_in, image_out, count):
     await image_out.send(image_in)
 ```
 
+Individual components can be tested outside of a graph using the
+``Component.test`` classmethod.  Provide values for each inport and the
+method returns a dictionary of lists containing the items sent to each
+outport:
+
+```python
+NumberIncrementer.test(data_in=1, constant_in=2)
+{"data_out": [3]}
+```
+
 ### Build and run a graph
 
 Graphs in Cascata are defined with a simple shorthand DSL:
