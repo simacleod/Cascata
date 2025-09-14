@@ -1,4 +1,5 @@
 import asyncio
+from typing import Union, get_args, get_origin
 from .channel import Channel
 from contextlib import asynccontextmanager, AsyncExitStack
 
@@ -108,10 +109,20 @@ class OutputPort:
         """
         inport.initialization_value = None
         if getattr(self, "type", None) is not None and getattr(inport, "type", None) is not None:
-            if self.type != inport.type:
-                raise TypeError(
-                    f"Cannot connect {self} ({self.type}) to {inport} ({inport.type})"
-                )
+            out_origin = get_origin(self.type)
+            out_types = (
+                set(get_args(self.type)) if out_origin is Union else {self.type}
+            )
+            in_origin = get_origin(inport.type)
+            in_types = (
+                set(get_args(inport.type)) if in_origin is Union else {inport.type}
+            )
+
+            for o in out_types:
+                if not any(issubclass(o, i) for i in in_types):
+                    raise TypeError(
+                        f"Cannot connect {self} ({self.type}) to {inport} ({inport.type})"
+                    )
         self.component.graph.edge(self, inport)
         if type(inport) is InputPort:
             self.connections.add(inport)

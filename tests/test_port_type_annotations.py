@@ -1,4 +1,5 @@
 import pytest
+from typing import Union
 from cascata import Graph, component, inport, outport
 
 @component
@@ -21,6 +22,21 @@ async def StrSink(inp: str):
 async def AnySink(inp):
     pass
 
+@component
+@inport('inp')
+async def IntOrStrSink(inp: Union[int, str]):
+    pass
+
+@component
+@outport('out')
+async def IntOrStrSource(out: Union[int, str]):
+    await out.send(1)
+
+@component
+@inport('inp')
+async def IntStrFloatSink(inp: Union[int, str, float]):
+    pass
+
 def test_type_mismatch_connection():
     g = Graph()
     g.src = IntSource
@@ -39,3 +55,22 @@ def test_missing_annotation_connection():
     g.src = IntSource
     g.sink = AnySink
     g.src.out >> g.sink.inp  # allowed without annotations
+
+def test_union_allows_subset_connection():
+    g = Graph()
+    g.src = IntSource
+    g.sink = IntOrStrSink
+    g.src.out >> g.sink.inp  # int is subset of Union[int, str]
+
+def test_union_outport_rejected_for_single_type_inport():
+    g = Graph()
+    g.src = IntOrStrSource
+    g.sink = IntSink
+    with pytest.raises(TypeError):
+        g.src.out >> g.sink.inp
+
+def test_union_outport_to_union_superset_connection():
+    g = Graph()
+    g.src = IntOrStrSource
+    g.sink = IntStrFloatSink
+    g.src.out >> g.sink.inp  # Union[int, str] subset of Union[int, str, float]
