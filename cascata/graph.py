@@ -551,11 +551,19 @@ class Graph:
             # (4) Fallback: global round-robin
             color_map[node] = rr
             rr = (rr + 1) % num_workers
+
+        # Ensure every component has an assignment, even if it was not part of the
+        # DAG (for example, connectors or isolated nodes that never appeared in
+        # the networkx graph).
+        for comp in self.nodes.values():
+            if comp not in color_map:
+                color_map[comp] = rr
+                rr = (rr + 1) % num_workers
     
         # 5) Instantiate workers and assign components
         workers = [GraphWorker() for _ in range(num_workers)]
         for comp_name, comp in self.nodes.items():
-            worker_index = color_map.get(comp_name, 0)
+            worker_index = color_map.get(comp, 0)
             workers[worker_index].components.append(comp)
         return workers
 
