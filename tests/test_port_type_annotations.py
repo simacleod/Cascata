@@ -37,6 +37,18 @@ async def IntOrStrSource(out: Union[int, str]):
 async def IntStrFloatSink(inp: Union[int, str, float]):
     pass
 
+
+@component
+@outport('out')
+async def ListSource(out: list[int]):
+    await out.send([1])
+
+
+@component
+@inport('inp')
+async def ListSink(inp: list[int]):
+    pass
+
 def test_type_mismatch_connection():
     g = Graph()
     g.src = IntSource
@@ -74,3 +86,10 @@ def test_union_outport_to_union_superset_connection():
     g.src = IntOrStrSource
     g.sink = IntStrFloatSink
     g.src.out >> g.sink.inp  # Union[int, str] subset of Union[int, str, float]
+
+
+def test_parameterized_generic_annotations_connection():
+    g = Graph()
+    g.src = ListSource
+    g.sink = ListSink
+    g.src.out >> g.sink.inp  # should not raise when using parameterized generics

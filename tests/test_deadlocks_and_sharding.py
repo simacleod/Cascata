@@ -50,13 +50,33 @@ def test_deadlock_cycle():
     g.b = Echo
     g.a.out >> g.b.inp
     g.b.out >> g.a.inp
-    import networkx as nx
-    g.networkx_graph = nx.DiGraph()
-    for outp, inp in g.edges:
-        g.networkx_graph.add_edge(outp.component.name, inp.component.name)
     with pytest.raises(DeadlockError) as exc:
         g.check_deadlocks()
-    assert 'Cycle deadlock' in str(exc.value)
+    message = str(exc.value)
+    assert 'Cycle deadlock' in message
+    assert "['a', 'b']" in message
+
+
+def test_deadlock_reports_unseeded_cycles_after_seeded_cycle():
+    g = Graph()
+    g.a = Echo
+    g.b = Echo
+    g.c = Echo
+    g.d = Echo
+
+    g.a.out >> g.b.inp
+    g.b.out >> g.a.inp
+    g.c.out >> g.d.inp
+    g.d.out >> g.c.inp
+
+    g.a.inp < 1  # seed only the first cycle
+
+    with pytest.raises(DeadlockError) as exc:
+        g.check_deadlocks()
+
+    message = str(exc.value)
+    assert "['c', 'd']" in message
+    assert "['a', 'b']" not in message
 
 
 def test_deadlock_orphan_port():

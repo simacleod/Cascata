@@ -110,14 +110,27 @@ def test_break_cycles_and_shard():
     g.b = Pipe
     g.a.o >> g.b.i
     g.b.o >> g.a.i
-    with pytest.raises(TypeError):
-        g._break_cycles()
+    assert g._break_cycles() is True
+    assert g._break_cycles() is False
     g2 = Graph()
     g2.p1 = Pipe
     g2.p2 = Pipe
     g2.p1.o >> g2.p2.i
     workers = g2.shard(2)
     assert len(workers) == 2
+
+
+def test_graph_copy_preserves_initialization_overrides():
+    g = Graph()
+    g.src = Prod
+    g.dest = Cons
+    g.src.o >> g.dest.i
+    g.dest.i < 42
+
+    clone = g.copy('clone')
+
+    assert g.dest.i.initialization_value == 42
+    assert clone.clone_dest.i.initialization_value == 42
 
 
 def test_graph_to_dot_with_graphviz():

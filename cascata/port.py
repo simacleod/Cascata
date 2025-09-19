@@ -1,5 +1,5 @@
 import asyncio
-from typing import Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 from .channel import Channel
 from contextlib import asynccontextmanager, AsyncExitStack
 
@@ -70,6 +70,24 @@ class InputPort:
         self.initialize(b)
 
 
+def _resolve_types(tp) -> set[type]:
+    """Expand typing hints into concrete classes for issubclass checks."""
+    origin = get_origin(tp)
+    if origin is Union:
+        resolved: set[type] = set()
+        for arg in get_args(tp):
+            resolved.update(_resolve_types(arg))
+        return resolved
+
+    if origin is not None:
+        tp = origin
+
+    if tp is Any:
+        return {object}
+
+    return {tp} if isinstance(tp, type) else set()
+
+
 class OutputPort:
     def __init__(self, name):
         """
@@ -109,20 +127,15 @@ class OutputPort:
         """
         inport.initialization_value = None
         if getattr(self, "type", None) is not None and getattr(inport, "type", None) is not None:
-            out_origin = get_origin(self.type)
-            out_types = (
-                set(get_args(self.type)) if out_origin is Union else {self.type}
-            )
-            in_origin = get_origin(inport.type)
-            in_types = (
-                set(get_args(inport.type)) if in_origin is Union else {inport.type}
-            )
+            out_types = _resolve_types(self.type)
+            in_types = _resolve_types(inport.type)
 
-            for o in out_types:
-                if not any(issubclass(o, i) for i in in_types):
-                    raise TypeError(
-                        f"Cannot connect {self} ({self.type}) to {inport} ({inport.type})"
-                    )
+            if out_types and in_types:
+                for o in out_types:
+                    if not any(issubclass(o, i) for i in in_types):
+                        raise TypeError(
+                            f"Cannot connect {self} ({self.type}) to {inport} ({inport.type})"
+                        )
         self.component.graph.edge(self, inport)
         if type(inport) is InputPort:
             self.connections.add(inport)

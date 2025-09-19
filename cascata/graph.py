@@ -198,7 +198,13 @@ class Graph:
             cloned_in_comp  = comp_map[inp.component]
             new_outp = getattr(cloned_out_comp, outp.name)
             new_inp  = getattr(cloned_in_comp,  inp.name)
+            saved_init = new_inp.initialization_value
             new_outp.connect(new_inp)
+            if isinstance(saved_init, OutputPort):
+                mapped_comp = comp_map.get(saved_init.component)
+                if mapped_comp is not None:
+                    saved_init = getattr(mapped_comp, saved_init.name)
+            new_inp.initialization_value = saved_init
 
         new._exports = {}
         for export_name, port in self._exports.items():
@@ -413,7 +419,8 @@ class Graph:
         try:
             cycle = nx.find_cycle(self.networkx_graph, orientation='original')
             # Removing an edge to break the cycle
-            self.networkx_graph.remove_edge(*cycle[0])
+            u, v = cycle[0][:2]
+            self.networkx_graph.remove_edge(u, v)
             return True
         except nx.NetworkXNoCycle:
             return False
@@ -435,21 +442,39 @@ class Graph:
 
         # 1) Cycles lacking a default seed:
         for scc in nx.strongly_connected_components(self.networkx_graph):
-            if len(scc) > 1 or any(self.networkx_graph.has_edge(n, n) for n in scc):
+            nodes = list(scc)
+            if len(nodes) > 1 or any(self.networkx_graph.has_edge(n, n) for n in nodes):
                 # ensure at least one component in the cycle has an inport.initialization_value
                 seeded = False
-                for comp_name in scc:
-                    comp = self.nodes[comp_name]
-                    for ip in comp.inports:
-                        if ip.initialization_value is not None:
-                            seeded = True
-                            break
+                resolved = []
+                for node in nodes:
+                    if isinstance(node, Component):
+                        comp = node
+                    elif node in self.nodes:
+                        comp = self.nodes[node]
+                    else:
+                        comp = None
+                    resolved.append((node, comp))
+                    if comp:
+                        for ip in comp.inports:
+                            if ip.initialization_value is not None:
+                                seeded = True
+                                break
+                    if seeded:
+                        break
                 if seeded:
-                    break
-                if not seeded:
-                    issues.append(
-                        f"Cycle deadlock: components {sorted(scc)} form a cycle with no default seed."
+                    continue
+                component_names = sorted(
+                    (
+                        comp.name
+                        if comp is not None
+                        else getattr(node, "name", str(node))
                     )
+                    for node, comp in resolved
+                )
+                issues.append(
+                    f"Cycle deadlock: components {component_names} form a cycle with no default seed."
+                )
 
         # 2) Orphan inports (no default, no upstream):
         for comp_name, comp in self.nodes.items():
