@@ -1,4 +1,12 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
+
+extensions = [
+    Extension(
+        "cascata._async_queue",
+        sources=["cascata/_async_queue.cpp"],
+        extra_compile_args=["-std=c++17", "-O3", "-DNDEBUG"],
+    )
+]
 
 setup(
     name='cascata',
@@ -38,5 +46,6 @@ setup(
         'networkx',
     ],
     include_package_data=True,
-    zip_safe=False
+    zip_safe=False,
+    ext_modules=extensions,
 )
