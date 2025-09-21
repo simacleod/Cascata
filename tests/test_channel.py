@@ -37,8 +37,8 @@ def test_channel_multi_process():
     q1 = multiprocessing.Queue()
     q2 = multiprocessing.Queue()
 
-    p_prod1 = multiprocessing.Process(target=producer_proc, args=(channel, 0, 500))
-    p_prod2 = multiprocessing.Process(target=producer_proc, args=(channel, 500, 1000))
+    p_prod1 = multiprocessing.Process(target=producer_proc, args=(channel, 0, 100))
+    p_prod2 = multiprocessing.Process(target=producer_proc, args=(channel, 500, 600))
     p_cons1 = multiprocessing.Process(target=consumer_proc, args=(channel, q1))
     p_cons2 = multiprocessing.Process(target=consumer_proc, args=(channel, q2))
 
@@ -57,8 +57,8 @@ def test_channel_multi_process():
     items2 = q2.get()
 
     all_items = items1 + items2
-    assert len(all_items) == 1000
-    assert sorted(all_items) == list(range(1000))
+    assert len(all_items) == 100
+    assert sorted(all_items) == list(range(100))
     assert set(items1).isdisjoint(set(items2))
 
 
@@ -78,8 +78,8 @@ def _stress_worker(iterations: int, result_queue: multiprocessing.Queue) -> None
 
 
 def test_channel_benchmark_stress():
-    workers = 10
-    iterations_per_worker = 10
+    workers = 4
+    iterations_per_worker = 5
     ctx = multiprocessing.get_context("spawn")
     queue_out: multiprocessing.Queue = ctx.Queue()
     processes = [

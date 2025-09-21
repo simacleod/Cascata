@@ -270,7 +270,7 @@ Graphs in Cascata are used to facilitate *composition* of components into interc
 
 ## Requirements and dependencies:
 
-* Python 3.7+
+* Python 3.10+
 * Currently working only on Linux.
 * Python package dependencies:
 
@@ -293,10 +293,6 @@ Cascata draws its name from the beautiful language of the mostly peninsular nati
 Please report any issues you find with Cascata in the issues page on this repository.
 
 Contributions to Cascata are highly encouraged and merge requests welcomed.
-
-### Features to be implemented:
-
-* Windows, MacOS support
 
 If you are a large corporation, and you find Cascata useful in your highly profitable software development ventures, consider sending the author like a million dollars. TIA
 
