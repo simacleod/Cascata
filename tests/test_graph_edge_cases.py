@@ -1,7 +1,7 @@
 import asyncio
 import importlib
 import sys
-import multiprocess as multiprocessing
+import multiprocessing
 import networkx as nx
 
 import pytest

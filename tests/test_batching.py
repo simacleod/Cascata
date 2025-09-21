@@ -1,5 +1,5 @@
 import asyncio
-import multiprocess as multiprocessing
+import multiprocessing
 import os
 import sys
 

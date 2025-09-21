@@ -36,9 +36,6 @@ setup(
     ],
     python_requires='>=3.10',
     install_requires=[
-        'multiprocess',
-        'dill',
-        'aioprocessing',
         'aioitertools',
         'networkx',
     ],

@@ -1,6 +1,6 @@
 import copy
 import networkx as nx
-import multiprocess
+import multiprocessing
 import asyncio
 import inspect
 from .component import Component, ComponentGroup, GroupConnector
@@ -600,14 +600,14 @@ class Graph:
             num_workers (int, optional): If specified, spawns this amount of processes. If unspecified, uses either the cpu count or the total number of nodes, whichever is smaller.
         """
         if num_workers is None:
-            num_workers = min(len(self.nodes), multiprocess.cpu_count())
+            num_workers = min(len(self.nodes), multiprocessing.cpu_count())
 
         self.check_deadlocks()
         
         workers = self.shard(num_workers)
         self.processes = []
         for worker in workers:
-            p = multiprocess.Process(target=worker.run)
+            p = multiprocessing.Process(target=worker.run)
             p.start()
             self.processes.append(p)
 

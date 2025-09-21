@@ -10,7 +10,7 @@ Parallel graph execution framework for Python
 
 ## Introduction
 
-Cascata is an asynchronous, event-driven, parallel graph execution framework for Python, powered by [asyncio](https://docs.python.org/3/library/asyncio.html) and [multiprocess](https://github.com/uqfoundation/multiprocess). Cascata enables the creation of networks of components, each operating in their own coroutine. Components in a Cascata graph can run on one or more CPU cores, enabling high-performance applications which benefit from parallel and/or asynchronous execution.
+Cascata is an asynchronous, event-driven, parallel graph execution framework for Python, powered by [asyncio](https://docs.python.org/3/library/asyncio.html) and [multiprocessing](https://docs.python.org/3/library/multiprocessing.html). Cascata enables the creation of networks of components, each operating in their own coroutine. Components in a Cascata graph can run on one or more CPU cores, enabling high-performance applications which benefit from parallel and/or asynchronous execution.
 
 ### Features
 
@@ -131,7 +131,7 @@ add_numbers.data_out >> print_results.data_in
 # run the graph
 
 graph.run(num_workers=3) # optionally specify a number of workers
-#by default, uses multiprocess.cpu_count() or the number of components in the graph, whichever is lower.
+#by default, uses multiprocessing.cpu_count() or the number of components in the graph, whichever is lower.
 ```
 
 ### Other notes and advanced usage:
@@ -265,7 +265,7 @@ Graphs in Cascata are used to facilitate *composition* of components into interc
 
 ## Performance considerations
 
-* Cascata uses an asynchronous version of `multiprocessing.Queue` provided by `aioprocessing`  for inter-process communication, which serializes objects with `dill`. Use of shared memory for transporting large amounts of data between processes is highly encouraged.
+* Cascata uses an asynchronous version of `multiprocessing.Queue` in a custom C++ extension for inter-process communication. Use of shared memory for transporting large amounts of data between processes is highly encouraged.
 * Since all components are defined as coroutines, the full feature set of `asyncio` can be leveraged to accelerate I/O bound code.
 
 ## Requirements and dependencies:
@@ -276,10 +276,8 @@ Graphs in Cascata are used to facilitate *composition* of components into interc
 
 ```bash
 	aioitertools
-	aioprocessing
-	multiprocess
 	networkx
-	graphviz
+	graphviz (optional)
 ```
 
 ## Acknowledgements
