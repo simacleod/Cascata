@@ -413,17 +413,21 @@ class Graph:
         return g
 
     def _break_cycles(self):
+        """Return an acyclic copy of the scheduling graph.
+
+        The original ``networkx_graph`` remains unchanged; the returned copy
+        has enough edges removed to make it acyclic for topological sorting.
         """
-        Breaks cycles in the graph for BFS coloring.
-        """
-        try:
-            cycle = nx.find_cycle(self.networkx_graph, orientation='original')
+        acyclic = self.networkx_graph.copy()
+        while True:
+            try:
+                cycle = nx.find_cycle(acyclic, orientation="original")
+            except nx.NetworkXNoCycle:
+                break
             # Removing an edge to break the cycle
             u, v = cycle[0][:2]
-            self.networkx_graph.remove_edge(u, v)
-            return True
-        except nx.NetworkXNoCycle:
-            return False
+            acyclic.remove_edge(u, v)
+        return acyclic
 
     def check_deadlocks(self) -> None:
         """
@@ -510,10 +514,7 @@ class Graph:
         shard_graph_final2 strategy to assign each node to a worker.
         """
         # 1) Break all cycles so we can topologically sort
-        while self._break_cycles():
-            pass
-    
-        G = self.networkx_graph
+        G = self._break_cycles()
     
         # 2) Build a helper map: group name → list of member nodes
         group_map = {}

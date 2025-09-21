@@ -5,6 +5,7 @@ import logging
 import tempfile
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import networkx as nx
 import pytest
 from cascata import Graph, inport, outport, component, persist
 from cascata.graph import GraphWorker, DeadlockError, Digraph
@@ -110,8 +111,11 @@ def test_break_cycles_and_shard():
     g.b = Pipe
     g.a.o >> g.b.i
     g.b.o >> g.a.i
-    assert g._break_cycles() is True
-    assert g._break_cycles() is False
+    acyclic = g._break_cycles()
+    assert acyclic is not g.networkx_graph
+    assert set(g.networkx_graph.edges) - set(acyclic.edges)
+    assert not nx.is_directed_acyclic_graph(g.networkx_graph)
+    assert nx.is_directed_acyclic_graph(acyclic)
     g2 = Graph()
     g2.p1 = Pipe
     g2.p2 = Pipe

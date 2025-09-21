@@ -153,15 +153,18 @@ def test_find_root_graph_branch():
     assert (g.p.o, g.sub.inp) in g.edges
 
 
-def test_break_cycles_true(monkeypatch):
+def test_break_cycles_true():
     g = Graph()
     g.a = Pipe
     g.b = Pipe
     g.a.o >> g.b.i
     g.b.o >> g.a.i
-    monkeypatch.setattr(nx, 'find_cycle', lambda G, orientation='original': [(g.a, g.b)])
-    assert g._break_cycles() is True
-    assert (g.a, g.b) not in g.networkx_graph.edges
+    acyclic = g._break_cycles()
+    assert acyclic is not g.networkx_graph
+    assert set(g.networkx_graph.edges) == {(g.a, g.b), (g.b, g.a)}
+    assert set(g.networkx_graph.edges) - set(acyclic.edges)
+    assert nx.is_directed_acyclic_graph(acyclic)
+    assert not nx.is_directed_acyclic_graph(g.networkx_graph)
 
 
 def test_check_deadlocks_seeded_cycle():
@@ -183,11 +186,15 @@ def test_shard_branches():
     g1.cons = Cons * 2
     g1.p1.o >> g1.cons.group[0].i
     g1.p2.o >> g1.cons.group[1].i
-    calls = iter([True, False])
+    calls = []
+
     def fake_break():
-        return next(calls)
+        calls.append(True)
+        return g1.networkx_graph.copy()
+
     g1._break_cycles = fake_break
     g1.shard(2)
+    assert len(calls) == 1
 
     g2 = Graph()
     g2.p = Prod
