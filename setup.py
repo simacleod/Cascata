@@ -10,7 +10,7 @@ extensions = [
 
 setup(
     name='cascata',
-    version='0.1.7',
+    version='0.1.8',
     author='Stuart MacLeod',
     author_email='orangootan@gmail.com',
     description='An asynchronous, multicore graph execution framework for Python.',
